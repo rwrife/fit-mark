@@ -23,11 +23,11 @@ Rebuilding a bike position after transport, service, or a component swap is hard
 
 ## Status and milestones
 
-Documentation-only scaffold; no Flutter application, build, icon, or CI exists yet. Issues cover skeleton, domain, workflow, UI, backup, polish, and Windows release. `AppStore/description.txt` describes planned behavior, not shipped functionality. `AppStore/icon.png` must be generated through spark-media OpenAI Images and inspected before platform wiring; no placeholder accepted.
+Flutter 3.47.7 application skeleton and Windows, Android, iOS CI now exist. App currently shows an empty-state message; bikes, snapshots, backup, platform-authentic Windows UI, and release packaging remain planned. Issues cover those milestones. `AppStore/description.txt` describes planned behavior, not shipped functionality. `AppStore/icon.png` must be generated through spark-media OpenAI Images and inspected before platform wiring; generated Flutter platform icons are temporary scaffold defaults, not production icons.
 
 ## Build (after skeleton issue)
 
-Use pinned stable Flutter from `toolchain.json`. Enable `windows/`, `android/`, and `ios/` from initial skeleton; run `flutter test`, `flutter build windows --release`, and `flutter build apk --debug`. Host-side Linux builds use Docker; Windows release build uses `windows-latest`. No build has been run for this docs-only scaffold.
+Use Flutter 3.47.7 from `toolchain.json`. Run `flutter analyze`, `flutter test`, `flutter build windows --release` on Windows and `flutter build apk --debug` in the Ubuntu container CI lane. iOS simulator build runs on macOS CI. Linux host checks may use Docker; do not infer Windows/iOS build success from Linux tests.
 
 Identifier: `com.infinityball.fitmark` for Android applicationId, iOS bundle ID and Windows/MSIX identity where applicable. iPad and Android tablets enabled. Later store publication may use repository ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, ASC_TEAM_ID secret names; Windows zip from `.github/workflows/release.yml` on `v*` tag/manual dispatch is MVP release target.
 

@@ -1,0 +1,60 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build windows --release
+      - name: Check Windows build
+        shell: pwsh
+        run: |
+          if (!(Test-Path build/windows/x64/runner/Release/fitmark.exe)) { throw 'Missing Windows executable' }
+  android:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/cirruslabs/flutter:stable
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Flutter SDK
+        run: |
+          git clone --quiet --filter=blob:none --branch 3.47.7 https://github.com/flutter/flutter.git /opt/flutter-pinned
+          echo /opt/flutter-pinned/bin >> "$GITHUB_PATH"
+      - name: Verify Flutter pin
+        run: |
+          /opt/flutter-pinned/bin/flutter --version
+          /opt/flutter-pinned/bin/flutter --version --machine > flutter-version.json
+          test "$(jq -r .frameworkVersion flutter-version.json)" = 3.47.7
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter test
+      - run: flutter build apk --debug
+      - run: test -s build/app/outputs/flutter-apk/app-debug.apk
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter build ios --simulator --debug --no-codesign
