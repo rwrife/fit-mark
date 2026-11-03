@@ -1,0 +1,13 @@
+{
+  "status": "PLANNED - no application skeleton or verified build yet",
+  "platform": "flutter-windows-android-ios",
+  "flutter_channel": "stable",
+  "flutter_version": "PIN_ON_SKELETON_ISSUE",
+  "windows_ci": "windows-latest",
+  "android_application_id": "com.infinityball.fitmark",
+  "ios_bundle_identifier": "com.infinityball.fitmark",
+  "bundle_identifier": "com.infinityball.fitmark",
+  "native_ipad_support": true,
+  "android_tablet_support": true,
+  "release": "Windows portable zip on v* tag or manual dispatch"
+}
