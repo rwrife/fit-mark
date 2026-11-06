@@ -14,10 +14,7 @@ void main() {
       debugDefaultTargetPlatformOverride = platform;
       try {
         await tester.pumpWidget(const FitMarkApp());
-        expect(
-          find.text('Bike profiles are not available yet.'),
-          findsOneWidget,
-        );
+        expect(find.text('No ride notes for this setup yet.'), findsOneWidget);
         if (platform == TargetPlatform.iOS) {
           expect(find.byType(CupertinoApp), findsOneWidget);
           expect(find.byType(MaterialApp), findsNothing);
