@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -24,7 +25,9 @@ class RideNotesView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final notes = journal.forBike(bikeId, snapshotId: snapshotId);
-    final ios = defaultTargetPlatform == TargetPlatform.iOS;
+    final platform = defaultTargetPlatform;
+    final ios = platform == TargetPlatform.iOS;
+    final windows = platform == TargetPlatform.windows;
     final items = <Widget>[
       const Padding(
         padding: EdgeInsets.all(12),
@@ -61,7 +64,12 @@ class RideNotesView extends StatelessWidget {
         ),
         SizedBox(
           height: 48,
-          child: ios
+          child: windows
+              ? fluent.Button(
+                  onPressed: () => _openEditor(context),
+                  child: const Text('Add ride note'),
+                )
+              : ios
               ? CupertinoButton(
                   onPressed: () => _openEditor(context),
                   child: const Text('Add ride note'),
@@ -77,8 +85,23 @@ class RideNotesView extends StatelessWidget {
   }
 
   void _openEditor(BuildContext context) {
-    final ios = defaultTargetPlatform == TargetPlatform.iOS;
-    if (ios) {
+    final platform = defaultTargetPlatform;
+    if (platform == TargetPlatform.windows) {
+      Navigator.of(context).push(
+        fluent.FluentPageRoute<void>(
+          builder: (context) => fluent.NavigationView(
+            content: fluent.ScaffoldPage(
+              header: const fluent.PageHeader(title: Text('New ride note')),
+              content: RideNoteEditor(
+                bikeId: bikeId,
+                snapshotId: snapshotId,
+                onAdd: onAdd,
+              ),
+            ),
+          ),
+        ),
+      );
+    } else if (platform == TargetPlatform.iOS) {
       Navigator.of(context).push(
         CupertinoPageRoute<void>(
           builder: (context) => CupertinoPageScaffold(
@@ -148,6 +171,7 @@ class _RideNoteEditorState extends State<RideNoteEditor> {
   @override
   Widget build(BuildContext context) {
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
+    final windows = defaultTargetPlatform == TargetPlatform.windows;
     Widget input(
       String label,
       TextEditingController controller, {
@@ -156,6 +180,14 @@ class _RideNoteEditorState extends State<RideNoteEditor> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: ios
           ? CupertinoTextField(
+              controller: controller,
+              placeholder: label,
+              keyboardType: numeric
+                  ? const TextInputType.numberWithOptions(decimal: true)
+                  : TextInputType.text,
+            )
+          : windows
+          ? fluent.TextBox(
               controller: controller,
               placeholder: label,
               keyboardType: numeric
@@ -180,13 +212,20 @@ class _RideNoteEditorState extends State<RideNoteEditor> {
         input('Ride impressions', _impressions),
         const Text('Comfort (1 uncomfortable – 5 comfortable)'),
         for (final rating in [1, 2, 3, 4, 5])
-          ios
-              ? CupertinoButton(
-                  onPressed: () => setState(() => _comfort = rating),
-                  child: Text(
-                    'Comfort $rating${rating == _comfort ? ' selected' : ''}',
-                  ),
-                )
+          ios || windows
+              ? ios
+                    ? CupertinoButton(
+                        onPressed: () => setState(() => _comfort = rating),
+                        child: Text(
+                          'Comfort $rating${rating == _comfort ? ' selected' : ''}',
+                        ),
+                      )
+                    : fluent.Button(
+                        onPressed: () => setState(() => _comfort = rating),
+                        child: Text(
+                          'Comfort $rating${rating == _comfort ? ' selected' : ''}',
+                        ),
+                      )
               : RadioGroup<int>(
                   groupValue: _comfort,
                   onChanged: (value) {
@@ -199,7 +238,12 @@ class _RideNoteEditorState extends State<RideNoteEditor> {
                 ),
         if (_error != null)
           Text(_error!, style: const TextStyle(color: Color(0xffba1a1a))),
-        ios
+        windows
+            ? fluent.FilledButton(
+                onPressed: _save,
+                child: const Text('Save ride note'),
+              )
+            : ios
             ? CupertinoButton.filled(
                 onPressed: _save,
                 child: const Text('Save ride note'),

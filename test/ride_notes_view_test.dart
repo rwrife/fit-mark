@@ -1,6 +1,7 @@
 import 'package:fitmark/ride_notes.dart';
 import 'package:fitmark/ride_notes_view.dart';
 import 'package:fitmark/snapshots.dart';
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +39,12 @@ void main() {
           platform == TargetPlatform.iOS
               ? CupertinoApp(
                   home: CupertinoPageScaffold(child: SafeArea(child: view)),
+                )
+              : platform == TargetPlatform.windows
+              ? fluent.FluentApp(
+                  home: fluent.NavigationView(
+                    content: fluent.ScaffoldPage(content: view),
+                  ),
                 )
               : MaterialApp(home: Scaffold(body: view)),
         );
