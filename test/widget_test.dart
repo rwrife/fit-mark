@@ -22,6 +22,7 @@ void main() {
   });
 
   tearDown(() async {
+    await store.close();
     await Hive.close();
     if (tempDir.existsSync()) await tempDir.delete(recursive: true);
   });
@@ -78,6 +79,7 @@ void main() {
           );
           expect(tester.takeException(), isNull);
         } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
           debugDefaultTargetPlatformOverride = null;
           tester.view.resetPhysicalSize();
           tester.view.resetDevicePixelRatio();

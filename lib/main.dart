@@ -86,7 +86,7 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
 
   @override
   void dispose() {
-    _store?.close();
+    if (widget.initialStore == null) _store?.close();
     super.dispose();
   }
 
