@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'backup_view.dart';
+import 'domain.dart';
+import 'local_store.dart';
 import 'ride_notes.dart';
 import 'ride_notes_view.dart';
 import 'snapshots.dart';
@@ -11,28 +14,32 @@ import 'snapshots.dart';
 void main() => runApp(const FitMarkApp());
 
 class FitMarkApp extends StatelessWidget {
-  const FitMarkApp({super.key});
+  final LocalStore? initialStore;
+  const FitMarkApp({super.key, this.initialStore});
 
   @override
   Widget build(BuildContext context) => switch (defaultTargetPlatform) {
-    TargetPlatform.iOS => const CupertinoApp(
+    TargetPlatform.iOS => CupertinoApp(
       title: 'Fit Mark',
-      home: AdaptiveHome(),
+      home: AdaptiveHome(initialStore: initialStore),
     ),
     TargetPlatform.windows => fluent.FluentApp(
       title: 'Fit Mark',
-      home: const AdaptiveHome(),
+      home: AdaptiveHome(initialStore: initialStore),
     ),
     _ => MaterialApp(
       title: 'Fit Mark',
       theme: ThemeData(useMaterial3: true),
-      home: const AdaptiveHome(),
+      home: AdaptiveHome(initialStore: initialStore),
     ),
   };
 }
 
 class AdaptiveHome extends StatefulWidget {
-  const AdaptiveHome({super.key});
+  final LocalStore? initialStore;
+  const AdaptiveHome({super.key, this.initialStore});
+
+  // ponytail: test-only injection bypasses native path discovery in widget tests.
 
   @override
   State<AdaptiveHome> createState() => _AdaptiveHomeState();
@@ -40,32 +47,105 @@ class AdaptiveHome extends StatefulWidget {
 
 class _AdaptiveHomeState extends State<AdaptiveHome> {
   int _selected = 0;
+  LocalStore? _store;
+  FitMarkData _data = FitMarkData();
+  String? _loadError;
   final _history = SnapshotHistory([
-    SetupSnapshot(
-      id: 'setup',
-      takenAt: DateTime.now().toUtc(),
-      measurements: {},
-    ),
+    SetupSnapshot(id: 'setup', takenAt: DateTime.utc(2026), measurements: {}),
   ]);
-  late RideJournal _journal = RideJournal(histories: {'bike': _history});
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialStore case final store?) {
+      _store = store;
+      _data = store.load();
+    } else {
+      _openStore();
+    }
+  }
+
+  Future<void> _openStore() async {
+    try {
+      final store = await LocalStore.open();
+      final data = store.load();
+      if (!mounted) {
+        await store.close();
+        return;
+      }
+      setState(() {
+        _store = store;
+        _data = data;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _loadError = 'Cannot open local journal: $error');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _store?.close();
+    super.dispose();
+  }
+
+  Future<void> _addNote(RideNote note) async {
+    final store = _store;
+    if (store == null) return;
+    try {
+      final current = store.load();
+      final bikes = {...current.bikes};
+      final histories = {...current.histories};
+      bikes.putIfAbsent(
+        'bike',
+        () => Bike(name: 'My bike', make: '', model: '', type: 'Bicycle'),
+      );
+      histories.putIfAbsent('bike', () => _history);
+      final next = FitMarkData(
+        bikes: bikes,
+        histories: histories,
+        notes: [...current.notes, note],
+      );
+      await store.save(next);
+      if (mounted) setState(() => _data = next);
+    } catch (error) {
+      if (mounted) setState(() => _loadError = 'Cannot save ride note: $error');
+    }
+  }
 
   Widget get _page => _selected == 0
       ? const _SetupOverview()
+      : _selected == 2
+      ? BackupView(store: _store!)
       : RideNotesView(
-          journal: _journal,
+          journal: RideJournal(
+            histories: {
+              ..._data.histories,
+              if (!_data.histories.containsKey('bike')) 'bike': _history,
+            },
+            notes: _data.notes,
+          ),
           bikeId: 'bike',
           snapshotId: 'setup',
-          onAdd: (note) => setState(() => _journal = _journal.add(note)),
+          onAdd: _addNote,
         );
 
-  void _select(int index) => setState(() => _selected = index);
+  void _select(int index) => setState(() {
+    _selected = index;
+    if (_store != null) _data = _store!.load();
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (_loadError != null) return Center(child: Text(_loadError!));
+    if (_store == null) {
+      return const Center(child: Text('Opening local journal…'));
+    }
     final platform = defaultTargetPlatform;
     final width = MediaQuery.sizeOf(context).width;
     final wide = width >= 700;
-    // ponytail: two journal destinations only; add bike selection in #6.
+    // ponytail: single placeholder bike until bike editing lands.
     final content = switch (platform) {
       TargetPlatform.windows => fluent.NavigationView(
         pane: fluent.NavigationPane(
@@ -85,6 +165,11 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
               title: const Text('Ride notes'),
               body: _page,
             ),
+            fluent.PaneItem(
+              icon: const fluent.Icon(fluent.FluentIcons.save),
+              title: const Text('Local backup'),
+              body: _page,
+            ),
           ],
         ),
         paneBodyBuilder: (item, body) => fluent.ScaffoldPage(
@@ -101,6 +186,10 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
                     label: const Text('Ride notes'),
                     onPressed: () => _select(1),
                   ),
+                  fluent.CommandBarButton(
+                    label: const Text('Local backup'),
+                    onPressed: () => _select(2),
+                  ),
                 ],
               ),
               Expanded(child: body ?? const SizedBox.shrink()),
@@ -110,7 +199,11 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
       ),
       TargetPlatform.iOS => CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(
-          middle: Text(_selected == 0 ? 'Fit Mark · Setup' : 'Ride notes'),
+          middle: Text(switch (_selected) {
+            0 => 'Fit Mark · Setup',
+            1 => 'Ride notes',
+            _ => 'Local backup',
+          }),
         ),
         child: SafeArea(
           child: wide
@@ -136,6 +229,10 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
                           icon: Icon(CupertinoIcons.pencil),
                           label: 'Ride notes',
                         ),
+                        BottomNavigationBarItem(
+                          icon: Icon(CupertinoIcons.archivebox),
+                          label: 'Local backup',
+                        ),
                       ],
                     ),
                   ],
@@ -160,6 +257,10 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
                         icon: Icon(Icons.edit_note),
                         label: Text('Ride notes'),
                       ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.save_alt),
+                        label: Text('Local backup'),
+                      ),
                     ],
                   ),
                   Expanded(child: _page),
@@ -180,6 +281,10 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
                     icon: Icon(Icons.edit_note),
                     label: 'Ride notes',
                   ),
+                  NavigationDestination(
+                    icon: Icon(Icons.save_alt),
+                    label: 'Local backup',
+                  ),
                 ],
               ),
       ),
@@ -190,6 +295,8 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
             const _SelectDestination(0),
         const SingleActivator(LogicalKeyboardKey.digit2, control: true):
             const _SelectDestination(1),
+        const SingleActivator(LogicalKeyboardKey.digit3, control: true):
+            const _SelectDestination(2),
       },
       child: Actions(
         actions: {
@@ -210,6 +317,7 @@ class _AdaptiveHomeState extends State<AdaptiveHome> {
       for (final (index, label, icon) in [
         (0, 'Setup', CupertinoIcons.gear),
         (1, 'Ride notes', CupertinoIcons.pencil),
+        (2, 'Local backup', CupertinoIcons.archivebox),
       ])
         Semantics(
           selected: _selected == index,
