@@ -1,0 +1,66 @@
+name: Windows release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v-prefixed tag to package
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Validate release source
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Expected existing vMAJOR.MINOR.PATCH tag' }
+          $tagCommit = git rev-parse "refs/tags/$env:RELEASE_TAG^{commit}"
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne (git rev-parse HEAD)) { throw 'Checkout must match release tag commit' }
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter build windows --release
+      - name: Package portable Windows build
+        shell: pwsh
+        run: |
+          $build = 'build/windows/x64/runner/Release'
+          if (!(Test-Path "$build/fitmark.exe")) { throw 'Missing Windows executable' }
+          $zip = "fit-mark-windows-$env:RELEASE_TAG.zip"
+          Compress-Archive -Path "$build/*" -DestinationPath $zip
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $PWD $zip))
+          try {
+            if (!(($archive.Entries | ForEach-Object FullName) -contains 'fitmark.exe')) { throw 'Zip missing Windows executable' }
+            if (!(($archive.Entries | ForEach-Object FullName) -match '^data/')) { throw 'Zip missing Flutter data' }
+          } finally { $archive.Dispose() }
+          if ((Get-Item $zip).Length -le 0) { throw 'Empty release zip' }
+      - name: Publish GitHub release
+        shell: pwsh
+        run: |
+          $zip = "fit-mark-windows-$env:RELEASE_TAG.zip"
+          gh release view $env:RELEASE_TAG --json tagName --jq .tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:RELEASE_TAG $zip
+          } else {
+            gh release create $env:RELEASE_TAG $zip --verify-tag --title "Fit Mark $env:RELEASE_TAG" --generate-notes
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }
+          $release = gh release view $env:RELEASE_TAG --json tagName,assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.tagName -ne $env:RELEASE_TAG) { throw 'Release verification failed' }
+          $asset = $release.assets | Where-Object { $_.name -eq $zip -and $_.size -gt 0 }
+          if (!$asset) { throw 'Release asset missing or empty' }
+          Write-Host "Release asset: $($asset.url)"
