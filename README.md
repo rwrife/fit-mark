@@ -23,7 +23,11 @@ Rebuilding a bike position after transport, service, or a component swap is hard
 
 ## Status and milestones
 
-Flutter 3.47.7 application skeleton and Windows, Android, iOS CI now exist. App currently shows an empty-state message; bikes, snapshots, backup, platform-authentic Windows UI, and release packaging remain planned. Issues cover those milestones. `AppStore/description.txt` describes planned behavior, not shipped functionality. `AppStore/icon.png` must be generated through spark-media OpenAI Images and inspected before platform wiring; generated Flutter platform icons are temporary scaffold defaults, not production icons.
+Flutter 3.47.7 app has platform-adaptive navigation, offline ride notes, JSON backup/import preview, and setup-sheet export. Setup screen remains a placeholder: entering bikes and measurements or comparing snapshots is not yet possible. `AppStore/description.txt` describes only working user-visible functions and states these limits. `AppStore/icon.png` is generated source art; platform launcher icons derive from it. Windows release zip workflow runs on `vMAJOR.MINOR.PATCH` tags or manual dispatch with an existing tag. CI covers Windows/Android/iOS builds; release upload requires a separate tagged workflow run.
+
+## Icon source
+
+Generated with `~/.local/bin/spark-media --project fit-mark image --prompt "analyze the repo and AppStore description to generate an icon that does not have any text or marketing, transparency, borders or corner radius. The image needs to be square, be edge-to-edge graphics and a modern colorful representation of the function provided by the app or game. If a logo or symbol is used, then there should be a gradient background or other abstract background behind the logo."` on 2026-11-09. OpenAI Images `gpt-image-2.5-flare`, 1024×1024, medium quality; source archived as `AppStore/icon.png`. Verified square, fully opaque pixels and colored edge corners; derived mipmaps, iOS catalog slots, and Windows ICO from this source. Visual/store review still needs a human before publication.
 
 ## Build (after skeleton issue)
 
